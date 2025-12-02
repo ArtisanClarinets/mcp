@@ -1,0 +1,154 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:server_name",
+ "creation": "2024-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "core_section",
+  "server_name",
+  "label",
+  "enabled",
+  "column_break_core",
+  "namespace",
+  "process_section",
+  "command",
+  "args_json",
+  "working_directory",
+  "filesystem_section",
+  "auto_create_paths",
+  "allowed_directories",
+  "memory_files",
+  "environment_section",
+  "environment_variables"
+ ],
+ "fields": [
+  {
+   "fieldname": "core_section",
+   "fieldtype": "Section Break",
+   "label": "Core Identity"
+  },
+  {
+   "fieldname": "server_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Server Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Label",
+   "reqd": 1
+  },
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_core",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "namespace",
+   "fieldtype": "Data",
+   "label": "Namespace",
+   "description": "Optional namespace for tool names. If empty, uses server_name."
+  },
+  {
+   "fieldname": "process_section",
+   "fieldtype": "Section Break",
+   "label": "Process Definition"
+  },
+  {
+   "fieldname": "command",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Command",
+   "reqd": 1,
+   "description": "The command to run (e.g., 'npx', 'node', 'python')"
+  },
+  {
+   "fieldname": "args_json",
+   "fieldtype": "Small Text",
+   "label": "Arguments (JSON)",
+   "reqd": 1,
+   "description": "JSON list of arguments (e.g., [\"-y\", \"@modelcontextprotocol/server-memory\"])"
+  },
+  {
+   "fieldname": "working_directory",
+   "fieldtype": "Data",
+   "label": "Working Directory",
+   "description": "Optional working directory for the subprocess"
+  },
+  {
+   "fieldname": "filesystem_section",
+   "fieldtype": "Section Break",
+   "label": "Filesystem Configuration"
+  },
+  {
+   "default": "1",
+   "fieldname": "auto_create_paths",
+   "fieldtype": "Check",
+   "label": "Auto Create Paths",
+   "description": "Automatically create directories and files if they don't exist"
+  },
+  {
+   "fieldname": "allowed_directories",
+   "fieldtype": "Table",
+   "label": "Allowed Directories",
+   "options": "MCP Allowed Directory"
+  },
+  {
+   "fieldname": "memory_files",
+   "fieldtype": "Table",
+   "label": "Memory Files",
+   "options": "MCP Memory File"
+  },
+  {
+   "fieldname": "environment_section",
+   "fieldtype": "Section Break",
+   "label": "Environment Variables"
+  },
+  {
+   "fieldname": "environment_variables",
+   "fieldtype": "Table",
+   "label": "Environment Variables",
+   "options": "MCP Environment Variable"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2024-01-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "GPT Manager",
+ "name": "MCP Remote Server",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

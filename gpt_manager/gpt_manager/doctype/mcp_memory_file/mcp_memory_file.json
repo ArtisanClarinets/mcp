@@ -1,0 +1,49 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2024-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "path",
+  "env_var_name",
+  "auto_create"
+ ],
+ "fields": [
+  {
+   "fieldname": "path",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Path",
+   "reqd": 1
+  },
+  {
+   "fieldname": "env_var_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Environment Variable Name"
+  },
+  {
+   "default": "1",
+   "fieldname": "auto_create",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Auto Create"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2024-01-01 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "GPT Manager",
+ "name": "MCP Memory File",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 0
+}
