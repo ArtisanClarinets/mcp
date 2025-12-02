@@ -27,7 +27,12 @@ mcp = MCP(name='gpt-manager-mcp-host')
 
 
 # Import local tools so they register via @mcp.tool()
-# Add your tool imports here:
+# Note: The tools module imports are done at runtime inside handle_mcp()
+# to avoid circular imports. Tools defined in tools.py will automatically
+# register when that module is imported.
+#
+# If you prefer static imports, uncomment the line below after ensuring
+# the tools module doesn't cause circular imports:
 # from gpt_manager.gpt_manager import tools
 
 

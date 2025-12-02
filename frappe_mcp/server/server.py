@@ -66,6 +66,14 @@ class MCP:
     _remote_started: bool
 
     def __init__(self, name: str | None = None):
+        """Initialize the MCP server instance.
+
+        Args:
+            name: Optional name for the MCP server. Defaults to None, which
+                  will use 'frappe-mcp' as the server name. For backward
+                  compatibility, name can also be passed as a positional
+                  argument (e.g., MCP('my-server')).
+        """
         self._tool_registry = OrderedDict()
         self._name = name
         self._mcp_entry_fn = None
