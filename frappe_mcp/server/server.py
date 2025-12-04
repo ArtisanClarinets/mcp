@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import OrderedDict
 from collections.abc import Callable
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 from werkzeug.wrappers import Request, Response
@@ -10,8 +12,15 @@ from werkzeug.wrappers import Request, Response
 import frappe_mcp.server.handlers as handlers
 import frappe_mcp.server.tools as tools
 from frappe_mcp.server import types
+from frappe_mcp.server.remote import (
+    RemoteMCPServer,
+    RemoteServerConfig,
+    RemoteServerError,
+)
 
-__all__ = ['MCP']
+__all__ = ['MCP', 'RemoteMCPServer', 'RemoteServerConfig', 'RemoteServerError']
+
+logger = logging.getLogger(__name__)
 
 
 class MCP:
@@ -52,11 +61,25 @@ class MCP:
     _name: str | None
     _tool_registry: OrderedDict[str, tools.Tool]
     _mcp_entry_fn: Callable | None
+    _remote_servers: dict[str, RemoteMCPServer]
+    _remote_tools: dict[str, str]  # host_tool_name -> remote_server_name
+    _remote_started: bool
 
-    def __init__(self, name: str | None):
+    def __init__(self, name: str | None = None):
+        """Initialize the MCP server instance.
+
+        Args:
+            name: Optional name for the MCP server. Defaults to None, which
+                  will use 'frappe-mcp' as the server name. For backward
+                  compatibility, name can also be passed as a positional
+                  argument (e.g., MCP('my-server')).
+        """
         self._tool_registry = OrderedDict()
         self._name = name
         self._mcp_entry_fn = None
+        self._remote_servers = {}
+        self._remote_tools = {}
+        self._remote_started = False
 
     def register(
         self,
@@ -213,6 +236,159 @@ class MCP:
         """
         self._tool_registry[tool['name']] = tool
 
+    def add_remote_server(self, config: RemoteServerConfig) -> None:
+        """Register a remote MCP server with this host.
+
+        The remote server is registered but not started yet. Call start_remote_servers()
+        to start all registered remote servers.
+
+        Args:
+            config: Configuration for the remote server.
+        """
+        self._remote_servers[config.name] = RemoteMCPServer(config)
+
+    def start_remote_servers(self) -> None:
+        """Idempotently start all registered remote servers and sync their tools.
+
+        This method is safe to call multiple times. On first call, it starts
+        all remote servers and synchronizes their tools. Subsequent calls do nothing.
+        """
+        if self._remote_started:
+            return
+
+        for server in self._remote_servers.values():
+            try:
+                server.start()
+                self._sync_remote_tools(server)
+            except RemoteServerError as e:
+                logger.error(f'Failed to start remote server: {e}')
+
+        self._remote_started = True
+
+    def _sync_remote_tools(self, server: RemoteMCPServer) -> None:
+        """Query tools from a remote server and populate the remote tools registry.
+
+        Tool names are namespaced using the server's namespace (or name if no
+        namespace is set), e.g., "memory.create_entities".
+
+        Args:
+            server: The remote server to sync tools from.
+        """
+        ns = server.config.namespace or server.config.name
+        try:
+            tools_list = server.list_tools()
+            for t in tools_list:
+                raw_name = t['name']
+                host_name = f'{ns}.{raw_name}'
+                self._remote_tools[host_name] = server.config.name
+        except RemoteServerError as e:
+            logger.error(f'Failed to sync tools from remote server {ns}: {e}')
+
+    def list_all_tools(self) -> list[dict[str, Any]]:
+        """Combine local tools and remote tools into a single MCP tools list.
+
+        Local tool names stay as-is. Remote tool names are namespaced
+        (e.g., "memory.create_entities").
+
+        Returns:
+            A list of tool descriptors for both local and remote tools.
+        """
+        # Local tools - use existing serialization
+        local_tools: list[dict[str, Any]] = []
+        for tool_info in self._tool_registry.values():
+            if tool := tools.handlers.get_validated_tool(tool_info):
+                local_tools.append(tool.model_dump(exclude_none=True, by_alias=True))
+
+        # Remote tools - query remote servers and rename tools
+        remote_tools: list[dict[str, Any]] = []
+        for host_name, server_name in self._remote_tools.items():
+            server = self._remote_servers.get(server_name)
+            if server is None:
+                continue
+
+            ns = server.config.namespace or server_name
+            raw_name = host_name.split('.', 1)[1]
+
+            try:
+                for t in server.list_tools():
+                    if t['name'] == raw_name:
+                        t_copy = dict(t)
+                        t_copy['name'] = host_name
+                        remote_tools.append(t_copy)
+                        break
+            except RemoteServerError as e:
+                logger.error(f'Failed to list tools from remote server {ns}: {e}')
+
+        return local_tools + remote_tools
+
+    def _call_remote_tool(
+        self, host_name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Route a tools/call to the appropriate RemoteMCPServer.
+
+        Args:
+            host_name: The namespaced tool name (e.g., "memory.create_entities").
+            arguments: Arguments to pass to the tool.
+
+        Returns:
+            The tool call result.
+
+        Raises:
+            RemoteServerError: If the tool call fails.
+        """
+        server_name = self._remote_tools[host_name]
+        server = self._remote_servers[server_name]
+        raw_name = host_name.split('.', 1)[1]
+        return server.call_tool(raw_name, arguments)
+
+    def _handle_tools_list(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Handle tools/list request, combining local and remote tools.
+
+        Args:
+            params: The request parameters.
+
+        Returns:
+            A dict with 'tools' list and 'nextCursor'.
+        """
+        types.ListToolsRequestParams.model_validate(params)
+
+        # Start remote servers if not already started
+        self.start_remote_servers()
+
+        all_tools = self.list_all_tools()
+        result = types.ListToolsResult(tools=all_tools, nextCursor=None)
+        return result.model_dump(exclude_none=True, by_alias=True)
+
+    def _handle_tools_call(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Handle tools/call request, routing to local or remote tools.
+
+        Args:
+            params: The request parameters including 'name' and 'arguments'.
+
+        Returns:
+            The tool call result.
+        """
+        call_params = types.CallToolRequestParams.model_validate(params)
+        tool_name = call_params.name
+        arguments = call_params.arguments or {}
+
+        # Start remote servers if not already started
+        self.start_remote_servers()
+
+        # Check if it's a remote tool
+        if tool_name in self._remote_tools:
+            try:
+                return self._call_remote_tool(tool_name, arguments)
+            except RemoteServerError as e:
+                error_content = types.TextContent(
+                    text=f"Remote server error: {e}"
+                )
+                result = types.CallToolResult(content=[error_content], isError=True)
+                return result.model_dump(exclude_none=True, by_alias=True)
+
+        # Otherwise, use local tool handler
+        return tools.handle_call_tool(params, self._tool_registry)
+
     def _handle_request(
         self,
         request_id: types.RequestId,
@@ -259,9 +435,9 @@ class MCP:
             case 'resources/unsubscribe':
                 result = handlers.handle_unsubscribe(params)
             case 'tools/call':
-                result = tools.handle_call_tool(params, self._tool_registry)
+                result = self._handle_tools_call(params)
             case 'tools/list':
-                result = tools.handle_list_tools(params, self._tool_registry)
+                result = self._handle_tools_list(params)
             case _:
                 return handle_invalid(
                     request_id,
